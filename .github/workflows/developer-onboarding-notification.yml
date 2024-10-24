@@ -31,17 +31,21 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const { context } = require('@actions/github');
             try {
               const author = process.env.AUTHOR;
               const repo = process.env.REPO;
               const owner = process.env.OWNER;
-              const { data } = await github.rest.search.issuesAndPullRequests({
-                q: `repo:${owner}/${repo} type:pr state:closed author:${author}`
+              const { data } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'closed',
+                per_page: 100,
               });
-              const prCount = data.items.filter(pr => pr.pull_request.merged_at).length;
+              const prCount = data.filter(pr => pr.user.login === author && pr.merged_at).length;
               core.exportVariable('PR_COUNT', prCount);
             } catch (error) {
-              core.setFailed(`Error counting merged pull requests: ${error.message}`);
+              core.warning(`Warning: ${error.message}`);
             }
 
       - name: Comment on the Merged Pull Request
@@ -49,8 +53,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const { context } = require('@actions/github');
             try {
-              const prCount = parseInt(process.env.PR_COUNT);
+              const prCount = parseInt(process.env.PR_COUNT || 0);
               const author = process.env.AUTHOR;
               const prNumber = context.payload.pull_request.number;
               const repo = process.env.REPO;
@@ -101,7 +106,7 @@ jobs:
                   issue_number: prNumber,
                   body: message
                 });
-            }
+              }
             } catch (error) {
-              core.setFailed(`Error creating comment: ${error.message}`);
+              core.warning(`Warning: ${error.message}`);
             }
